@@ -68,6 +68,8 @@ async def transcribe_upload_files(request: Request, file: UploadFile, background
     file_ext = filename.rsplit(".", 1)[1]
     if file_ext.lower() in file_mask:
         try:
+            if not os.path.exists('./upload'):
+                os.makedirs('upload')
             async with aiofiles.open(f'upload/{file.filename}', 'wb') as out_file:
                 print("Starting file upload")
                 while content := await file.read(CHUNK_SIZE):  # async read chunk
