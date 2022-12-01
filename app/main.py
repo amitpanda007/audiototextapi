@@ -72,8 +72,10 @@ async def transcribe_upload_files(request: Request, file: UploadFile, background
                 os.makedirs('upload')
             async with aiofiles.open(f'upload/{file.filename}', 'wb') as out_file:
                 print("Starting file upload")
-                while content := await file.read(CHUNK_SIZE):  # async read chunk
+                content = await file.read(CHUNK_SIZE)
+                while content:  # async read chunk
                     await out_file.write(content)  # async write chunk
+                    content = await file.read(CHUNK_SIZE)
 
             print("File upload done. starting transcription.")
             background_tasks.add_task(transcribe_wrapper, filename, folder)
