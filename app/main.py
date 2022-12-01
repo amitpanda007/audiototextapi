@@ -3,6 +3,7 @@ from typing import Union
 
 import asyncio
 import aiofiles
+import uvicorn
 import whisper
 
 from fastapi import FastAPI, Request, BackgroundTasks
