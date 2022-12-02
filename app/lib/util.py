@@ -2,6 +2,7 @@ import os
 import asyncio
 from os.path import dirname, abspath, join
 
+from app.lib import constants
 
 '''
 Get status as an event generator
@@ -91,3 +92,60 @@ async def transcribe_status(param, request):
             print('No change in status...')
 
         await asyncio.sleep(status_stream_delay)
+
+
+async def language_detect_status(param, request):
+    folder_name = param
+    previous_status = None
+    current_status = None
+    transcribe_data = ""
+    while True:
+        if await request.is_disconnected():
+            print('Request disconnected')
+            break
+
+        if previous_status and previous_status == "DONE":
+            print('Request completed. Disconnecting now')
+            yield {
+                "event": "end",
+                "data": previous_status
+            }
+            break
+
+        # Read folder from provided folder_name to check if transcribed data exist
+        dir_path = os.path.dirname(os.path.realpath(__file__))
+        if os.path.isdir(f'{dir_path}/../../upload-recording/{folder_name}'):
+            dirs = os.listdir(f'{dir_path}/../../upload-recording/{folder_name}')
+            if len(dirs) == 0:
+                print("Directory is empty")
+                current_status = None
+            else:
+                print("Directory is not empty")
+                file = dirs[0]
+                with open(f'{dir_path}/../../upload-recording/{folder_name}/{file}') as f:
+                    file_content = f.read()
+
+                yield {
+                    "event": "update",
+                    "retry": status_stream_retry_timeout,
+                    "data": file_content
+                }
+                current_status = "DONE"
+        else:
+            print(f"Directory /upload-recording/{folder_name} doesn't exist")
+
+        if previous_status != current_status:
+            previous_status = current_status
+            print('Current status :', current_status)
+        else:
+            print('No change in status...')
+
+        await asyncio.sleep(status_stream_delay)
+
+
+def get_lang(code: str):
+    langs = constants.LANGUAGES
+    try:
+        return langs[code]
+    except KeyError:
+        return ""

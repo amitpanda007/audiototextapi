@@ -1,4 +1,5 @@
 import os
+import time
 from typing import Union
 
 import asyncio
@@ -13,7 +14,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from sse_starlette.sse import EventSourceResponse
 
-from app.lib.util import transcribe_status
+from app.lib.util import transcribe_status, language_detect_status, get_lang
 
 app = FastAPI()
 
@@ -53,11 +54,40 @@ def transcribe_data(filename: str, result_folder: str):
     return transcribed_text
 
 
-async def transcribe_wrapper(filename: str, result_folder: str):
+def detect_language(filename: str, result_folder: str):
+    model = whisper.load_model("medium")
+
+    # load audio and pad/trim it to fit 30 seconds
+    audio = whisper.load_audio(f'./upload-recording/{filename}')
+    audio = whisper.pad_or_trim(audio)
+
+    # make log-Mel spectrogram and move to the same device as the model
+    mel = whisper.log_mel_spectrogram(audio).to(model.device)
+
+    # detect the spoken language
+    _, probs = model.detect_language(mel)
+    probable_lang = max(probs, key=probs.get)
+
+    probable_lang_long = get_lang(probable_lang)
+    print(f"Detected language: {probable_lang_long}")
+
+    if not os.path.exists(f'upload-recording/{result_folder}'):
+        os.makedirs(f'upload-recording/{result_folder}')
+        name = filename.rsplit(".", 1)[0]
+        with open(f'upload-recording/{result_folder}/{name}.txt', 'w') as out_file:
+            out_file.write(probable_lang_long)
+    return probable_lang_long
+
+
+async def transcribe_wrapper(filename: str, result_folder: str, operation_type: str):
     loop = asyncio.get_event_loop()
     # loop.create_task(transcribe_data(filename))
-    text = await loop.run_in_executor(None, lambda: transcribe_data(filename, result_folder))
-    print(text)
+    if operation_type == "transcribe":
+        text = await loop.run_in_executor(None, lambda: transcribe_data(filename, result_folder))
+        print(text)
+    elif operation_type == "language":
+        text = await loop.run_in_executor(None, lambda: detect_language(filename, result_folder))
+        print(text)
 
 
 @app.post("/transcribe-upload/")
@@ -79,7 +109,7 @@ async def transcribe_upload_files(request: Request, file: UploadFile, background
                     content = await file.read(CHUNK_SIZE)
 
             print("File upload done. starting transcription.")
-            background_tasks.add_task(transcribe_wrapper, filename, folder)
+            background_tasks.add_task(transcribe_wrapper, filename, folder, "transcribe")
 
             transcribed_text = ""
             return JSONResponse(
@@ -98,7 +128,43 @@ async def transcribe_upload_files(request: Request, file: UploadFile, background
         )
 
 
+@app.post("/transcribe-audio-blob/")
+async def transcribe_audio_blob(request: Request, file: UploadFile, background_tasks: BackgroundTasks):
+    cur_epoch_time = int(time.time())
+    filename = file.filename + f'_{cur_epoch_time}' + ".wav"
+    form = await request.form()
+    folder = form["folder"]
+    try:
+        if not os.path.exists('./upload-recording'):
+            os.makedirs('upload-recording')
+        async with aiofiles.open(f'upload-recording/{filename}', 'wb') as out_file:
+            print("Starting file upload")
+            content = await file.read(CHUNK_SIZE)
+            while content:  # async read chunk
+                await out_file.write(content)  # async write chunk
+                content = await file.read(CHUNK_SIZE)
+
+        print("File upload done. starting transcription.")
+        background_tasks.add_task(transcribe_wrapper, filename, folder, "language")
+
+        return JSONResponse(
+            status_code=200,
+            content={"message": f"Audio recording received."},
+        )
+    except Exception:
+        return JSONResponse(
+            status_code=500,
+            content={"message": f"Oops! Something went wrong..."},
+        )
+
+
 @app.get('/transcribe/result')
 async def get_transcribe_result(param: str, request: Request):
     event_generator = transcribe_status(param, request)
+    return EventSourceResponse(event_generator)
+
+
+@app.get('/language-detect/result')
+async def get_transcribe_result(param: str, request: Request):
+    event_generator = language_detect_status(param, request)
     return EventSourceResponse(event_generator)
