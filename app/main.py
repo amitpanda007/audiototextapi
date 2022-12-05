@@ -39,6 +39,14 @@ async def read_root():
     return {"Hello": "World"}
 
 
+@app.get("/heartbeat")
+async def heartbeat():
+    return JSONResponse(
+        status_code=200,
+        content={"message": "alive"},
+    )
+
+
 def transcribe_data(filename: str, result_folder: str):
     # Start Transcribe with Whisper
     model = whisper.load_model('medium')
