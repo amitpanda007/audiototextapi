@@ -20,10 +20,7 @@ app = FastAPI()
 
 CHUNK_SIZE = 4096 * 4096
 
-origins = [
-    "http://localhost",
-    "http://localhost:4200",
-]
+origins = ["*"]
 
 app.add_middleware(
     CORSMiddleware,

@@ -31,7 +31,7 @@ tokenizers==0.13.2
 torch==1.13.0
 tqdm==4.64.1
 transformers==4.24.0
-typing_extensions==4.4.0
+typing-extensions==4.4.0
 urllib3==1.26.13
 uvicorn==0.20.0
 watchfiles==0.18.1
