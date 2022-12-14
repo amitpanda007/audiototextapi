@@ -49,7 +49,7 @@ def transcribe_data(filename: str, result_folder: str):
     model = whisper.load_model('medium')
 
     # To run only on CPU set fp16=False. eg. model.transcribe(f'./input/{filename}', fp16=False)
-    out = model.transcribe(f'./upload/{filename}', fp16=False)
+    out = model.transcribe(f'./upload/{filename}')
     transcribed_text = out["text"]
     if not os.path.exists(f'upload/{result_folder}'):
         os.makedirs(f'upload/{result_folder}')
